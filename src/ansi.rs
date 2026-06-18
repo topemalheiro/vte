@@ -496,6 +496,18 @@ pub trait Handler {
     /// OSC to set window title.
     fn set_title(&mut self, _: Option<String>) {}
 
+    /// Mark the start of a shell prompt (OSC 133 ; A).
+    fn prompt_start(&mut self) {}
+
+    /// Mark the start of a user-entered command (OSC 133 ; B).
+    fn command_start(&mut self) {}
+
+    /// Mark the start of command output (OSC 133 ; C).
+    fn command_executed(&mut self) {}
+
+    /// Mark the end of a command (OSC 133 ; D).
+    fn command_finished(&mut self, _exit_code: Option<u32>) {}
+
     /// Set the cursor style.
     fn set_cursor_style(&mut self, _: Option<CursorStyle>) {}
 
@@ -1489,6 +1501,20 @@ where
                 match params[2] {
                     b"?" => self.handler.clipboard_load(*clipboard, terminator),
                     base64 => self.handler.clipboard_store(*clipboard, base64),
+                }
+            },
+
+            // Semantic prompt / shell integration (OSC 133).
+            b"133" if params.len() >= 2 => {
+                match params[1].first().copied() {
+                    Some(b'A') => self.handler.prompt_start(),
+                    Some(b'B') => self.handler.command_start(),
+                    Some(b'C') => self.handler.command_executed(),
+                    Some(b'D') => {
+                        let exit_code = params.get(2).and_then(|p| parse_number(p).map(u32::from));
+                        self.handler.command_finished(exit_code);
+                    },
+                    _ => unhandled(params),
                 }
             },
 
